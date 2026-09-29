@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DWG Viewer</title>
+  <meta name="description" content="Visualize arquivos DWG (AutoCAD) no navegador e consulte as dimensões de cada objeto." />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%2335b6ff'/><path d='M7 23V9h6a7 7 0 0 1 0 14zM19 9l3 14 3-14' stroke='%230b1220' stroke-width='2.4' fill='none' stroke-linejoin='round'/></svg>" />
+  <link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+  <header class="toolbar">
+    <div class="brand">
+      <span class="logo" aria-hidden="true">DW</span>
+      <span class="brand-name">DWG Viewer</span>
+      <span class="file-name" id="fileName"></span>
+    </div>
+    <div class="tools">
+      <label class="btn primary" title="Abrir arquivo .dwg">
+        <input type="file" id="fileInput" accept=".dwg" hidden />
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0-4 4m4-4 4 4M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>
+        <span>Abrir DWG</span>
+      </label>
+      <div class="group" role="group" aria-label="Zoom">
+        <button class="btn icon" id="zoomIn" title="Aproximar (+)" disabled><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+        <button class="btn icon" id="zoomOut" title="Afastar (−)" disabled><svg viewBox="0 0 24 24"><path d="M5 12h14"/></svg></button>
+        <button class="btn icon" id="zoomFit" title="Ajustar à tela (F)" disabled><svg viewBox="0 0 24 24"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg></button>
+      </div>
+      <button class="btn" id="measureBtn" title="Medir distância entre dois pontos (M)" disabled>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 17 17 3l4 4L7 21zM7 13l2 2M10 10l2 2M13 7l2 2"/></svg>
+        <span>Medir</span>
+      </button>
+      <div class="units">
+        <label>Desenho em
+          <select id="srcUnit"></select>
+        </label>
+        <label>Exibir em
+          <select id="dstUnit"></select>
+        </label>
+        <label>Casas
+          <select id="precision">
+            <option>0</option><option>1</option><option selected>2</option><option>3</option><option>4</option>
+          </select>
+        </label>
+      </div>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="stage" id="stage">
+      <canvas id="canvas"></canvas>
+      <div class="empty" id="empty">
+        <div class="empty-card">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3H6a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8zM14 3v5h5M9 14h6M9 17h4"/></svg>
+          <h1>Visualize um arquivo DWG</h1>
+          <p>Arraste um arquivo <strong>.dwg</strong> para cá ou use <em>Abrir DWG</em>. O arquivo é lido no seu navegador e não é enviado a nenhum servidor.</p>
+          <div class="empty-actions">
+            <label class="btn primary"><input type="file" id="fileInput2" accept=".dwg" hidden /><span>Escolher arquivo</span></label>
+            <button class="btn" id="sampleBtn">Abrir exemplo</button>
+          </div>
+        </div>
+      </div>
+      <div class="drop-hint" id="dropHint">Solte o arquivo DWG</div>
+      <div class="loading" id="loading" hidden>
+        <div class="spinner"></div>
+        <p id="loadingText">Carregando…</p>
+      </div>
+      <div class="hint" id="hint" hidden>Rolar: zoom · Arrastar: mover · Clique: selecionar · Shift+clique: somar seleção · Duplo clique: ajustar</div>
+    </section>
+
+    <aside class="sidebar">
+      <nav class="tabs" role="tablist">
+        <button role="tab" class="tab active" data-tab="sel">Dimensões</button>
+        <button role="tab" class="tab" data-tab="list">Objetos <span class="badge" id="objCount">0</span></button>
+        <button role="tab" class="tab" data-tab="layers">Camadas</button>
+      </nav>
+
+      <div class="panel active" id="panel-sel">
+        <div class="placeholder" id="selEmpty">Clique em um objeto do desenho (parede, porta, linha…) para ver largura, altura, comprimento e área.</div>
+        <div id="selContent" hidden>
+          <div class="sel-head">
+            <span class="swatch" id="selSwatch"></span>
+            <div>
+              <div class="sel-title" id="selTitle"></div>
+              <div class="sel-sub" id="selSub"></div>
+            </div>
+            <button class="btn small" id="zoomSel" title="Aproximar da seleção">Zoom</button>
+            <button class="btn small" id="clearSel" title="Limpar seleção (Esc)">Limpar</button>
+          </div>
+          <table class="props"><tbody id="selTable"></tbody></table>
+        </div>
+      </div>
+
+      <div class="panel" id="panel-list">
+        <div class="filters">
+          <input type="search" id="search" placeholder="Buscar tipo, camada, texto, bloco…" />
+          <div class="filter-row">
+            <select id="typeFilter"><option value="">Todos os tipos</option></select>
+            <select id="layerFilter"><option value="">Todas as camadas</option></select>
+            <button class="btn small" id="exportCsv" title="Exportar tabela em CSV">CSV</button>
+          </div>
+        </div>
+        <div class="table-wrap">
+          <table class="grid">
+            <thead>
+              <tr>
+                <th data-sort="id">#</th>
+                <th data-sort="typeLabel">Tipo</th>
+                <th data-sort="layer">Camada</th>
+                <th data-sort="width" class="num">Largura</th>
+                <th data-sort="height" class="num">Altura</th>
+                <th data-sort="length" class="num">Compr.</th>
+                <th data-sort="area" class="num">Área</th>
+              </tr>
+            </thead>
+            <tbody id="listBody"></tbody>
+          </table>
+        </div>
+        <div class="list-foot" id="listFoot"></div>
+      </div>
+
+      <div class="panel" id="panel-layers">
+        <div class="filter-row">
+          <button class="btn small" id="layersAll">Mostrar todas</button>
+          <button class="btn small" id="layersNone">Ocultar todas</button>
+        </div>
+        <ul class="layers" id="layerList"></ul>
+      </div>
+    </aside>
+  </main>
+
+  <footer class="status">
+    <span id="stCursor">X — · Y —</span>
+    <span id="stZoom"></span>
+    <span id="stInfo">Nenhum arquivo carregado</span>
+  </footer>
+
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
